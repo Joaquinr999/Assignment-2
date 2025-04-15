@@ -1,0 +1,87 @@
+Question 7 Part A
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+
+# Black-Scholes formula for European put
+def european_put(S, K, T, r, sigma, q):
+    d1 = (np.log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    put = K * np.exp(-r * T) * norm.cdf(-d2) - S * np.exp(-q * T) * norm.cdf(-d1)
+    return put
+
+# Binomial Tree for American put option
+def american_put_binomial(S, K, T, r, sigma, q, N=200):
+    dt = T / N
+    u = np.exp(sigma * np.sqrt(dt))
+    d = 1 / u
+    p = (np.exp((r - q) * dt) - d) / (u - d)
+    
+    # Initialize asset prices at maturity
+    asset_prices = np.array([S * u**j * d**(N - j) for j in range(N + 1)])
+    option_values = np.maximum(K - asset_prices, 0)
+    
+    # Step back through tree
+    for i in range(N - 1, -1, -1):
+        asset_prices = asset_prices[:-1] * u
+        option_values = np.exp(-r * dt) * (p * option_values[1:] + (1 - p) * option_values[:-1])
+        option_values = np.maximum(option_values, K - asset_prices)
+        
+    return option_values[0]
+
+# Fixed Parameters
+K = 100
+T = 1
+r = 0.05
+sigma = 0.30
+q = 0.02
+
+fig, axs = plt.subplots(2, 2, figsize=(14, 10))
+fig.suptitle("Early Exercise Premium Sensitivity Analysis", fontsize=16)
+
+# --- 1. Varying Stock Price ---
+stock_prices = np.linspace(50, 150, 100)
+prem_stock = [american_put_binomial(S, K, T, r, sigma, q) - european_put(S, K, T, r, sigma, q) for S in stock_prices]
+
+axs[0, 0].plot(stock_prices, prem_stock)
+axs[0, 0].set_title("Premium vs Stock Price")
+axs[0, 0].set_xlabel("Stock Price (S)")
+axs[0, 0].set_ylabel("Premium")
+axs[0, 0].grid(True)
+
+# --- 2. Varying Interest Rate ---
+interest_rates = np.linspace(0.01, 0.10, 10)
+prem_r = [american_put_binomial(100, K, T, r_val, sigma, q) - european_put(100, K, T, r_val, sigma, q) for r_val in interest_rates]
+
+axs[0, 1].plot(interest_rates, prem_r, marker='o')
+axs[0, 1].set_title("Premium vs Interest Rate")
+axs[0, 1].set_xlabel("Interest Rate (r)")
+axs[0, 1].set_ylabel("Premium")
+axs[0, 1].grid(True)
+
+# --- 3. Varying Dividend Yield ---
+dividend_yields = np.linspace(0.00, 0.10, 10)
+prem_q = [american_put_binomial(100, K, T, r, sigma, q_val) - european_put(100, K, T, r, sigma, q_val) for q_val in dividend_yields]
+
+axs[1, 0].plot(dividend_yields, prem_q, marker='x', color='green')
+axs[1, 0].set_title("Premium vs Dividend Yield")
+axs[1, 0].set_xlabel("Dividend Yield (q)")
+axs[1, 0].set_ylabel("Premium")
+axs[1, 0].grid(True)
+
+# --- 4. Varying Volatility (S = 50 and S = 150) ---
+volatilities = np.linspace(0.1, 0.6, 10)
+prem_vol_50 = [american_put_binomial(50, K, T, r, sig, q) - european_put(50, K, T, r, sig, q) for sig in volatilities]
+prem_vol_150 = [american_put_binomial(150, K, T, r, sig, q) - european_put(150, K, T, r, sig, q) for sig in volatilities]
+
+axs[1, 1].plot(volatilities, prem_vol_50, label='S = 50', marker='o')
+axs[1, 1].plot(volatilities, prem_vol_150, label='S = 150', marker='x')
+axs[1, 1].set_title("Premium vs Volatility")
+axs[1, 1].set_xlabel("Volatility (σ)")
+axs[1, 1].set_ylabel("Premium")
+axs[1, 1].legend()
+axs[1, 1].grid(True)
+
+plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+plt.show()
