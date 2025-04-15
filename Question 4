@@ -1,0 +1,64 @@
+import numpy as np
+import pandas as pd
+from scipy.stats import norm
+
+# Parameters
+S0 = 100         # Initial stock price
+K = 100          # Strike price
+T = 1            # Time to maturity (1 year)
+r = 0.05         # Risk-free rate
+sigma = 0.2      # Volatility
+n_steps = 252    # Daily rebalancing
+dt = T / n_steps
+n_simulations = 1  # Single path for this test
+
+# Transaction costs (as percentages)
+transaction_costs = [0.001, 0.01, 0.02, 0.05]
+
+# Simulate stock path using geometric Brownian motion
+np.random.seed(42)
+Z = np.random.normal(0, 1, n_steps)
+S = np.zeros(n_steps)
+S[0] = S0
+for t in range(1, n_steps):
+    S[t] = S[t - 1] * np.exp((r - 0.5 * sigma ** 2) * dt + sigma * np.sqrt(dt) * Z[t])
+
+# Black-Scholes delta for a call option
+def call_delta(S, K, T, t, r, sigma):
+    tau = T - t
+    if tau <= 0:
+        return 1.0 if S > K else 0.0
+    d1 = (np.log(S / K) + (r + 0.5 * sigma ** 2) * tau) / (sigma * np.sqrt(tau))
+    return norm.cdf(d1)
+
+# Function to simulate delta hedging and calculate P&L and performance
+results = []
+for cost_rate in transaction_costs:
+    cash_account = 0
+    stock_held = 0
+    previous_delta = call_delta(S[0], K, T, 0, r, sigma)
+    stock_held = previous_delta
+    cash_account = -stock_held * S[0]
+
+    total_costs = 0
+
+    for t in range(1, n_steps):
+        t_val = t * dt
+        current_delta = call_delta(S[t], K, T, t_val, r, sigma)
+        delta_change = current_delta - previous_delta
+        transaction_cost = abs(delta_change) * S[t] * cost_rate
+        total_costs += transaction_cost
+
+        cash_account -= delta_change * S[t] + transaction_cost
+        stock_held = current_delta
+        previous_delta = current_delta
+
+    # Final portfolio value
+    final_portfolio = stock_held * S[-1] + cash_account
+    option_payoff = max(S[-1] - K, 0)
+    pnl = final_portfolio - option_payoff
+    results.append({'Transaction Cost': f"{int(cost_rate*100)}%", 'P&L': pnl})
+
+# Display results
+df_results = pd.DataFrame(results)
+print(df_results)
