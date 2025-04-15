@@ -1,0 +1,55 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import norm
+
+# Black-Scholes formula for European put
+def european_put(S, K, T, r, sigma, q):
+    d1 = (np.log(S / K) + (r - q + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+    d2 = d1 - sigma * np.sqrt(T)
+    put = K * np.exp(-r * T) * norm.cdf(-d2) - S * np.exp(-q * T) * norm.cdf(-d1)
+    return put
+
+# Binomial Tree for American put option
+def american_put_binomial(S, K, T, r, sigma, q, N=200):
+    dt = T / N
+    u = np.exp(sigma * np.sqrt(dt))
+    d = 1 / u
+    p = (np.exp((r - q) * dt) - d) / (u - d)
+    
+    # Initialize asset prices at maturity
+    asset_prices = np.array([S * u**j * d**(N - j) for j in range(N + 1)])
+    option_values = np.maximum(K - asset_prices, 0)
+    
+    # Step back through tree
+    for i in range(N - 1, -1, -1):
+        asset_prices = asset_prices[:-1] * u
+        option_values = np.exp(-r * dt) * (p * option_values[1:] + (1 - p) * option_values[:-1])
+        option_values = np.maximum(option_values, K - asset_prices)
+        
+    return option_values[0]
+
+# Parameters
+K = 100          # Strike price
+T = 1            # Time to maturity (1 year)
+r = 0.05         # Risk-free rate
+sigma = 0.30     # Volatility
+q = 0.02         # Dividend yield
+
+# Stock prices to evaluate
+stock_prices = np.linspace(50, 150, 100)
+
+# Compute option values
+euro_vals = [european_put(S, K, T, r, sigma, q) for S in stock_prices]
+amer_vals = [american_put_binomial(S, K, T, r, sigma, q) for S in stock_prices]
+premiums = np.array(amer_vals) - np.array(euro_vals)
+
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.plot(stock_prices, premiums, label="Early Exercise Premium", color="blue")
+plt.xlabel("Stock Price (S)")
+plt.ylabel("Premium (American Put - European Put)")
+plt.title("Early Exercise Premium vs Stock Price")
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
